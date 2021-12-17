@@ -1,0 +1,3 @@
+
+openssl sha384 -binary -out firmware/BS53LIV.bin.sig firmware/BS53LIV.bin
+printf "%08x" `cat firmware/BS53LIV.bin | wc -c`| xxd -r -p >>firmware/BS53LIV.bin.sig

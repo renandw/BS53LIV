@@ -24,9 +24,12 @@ const int relay_gpio_1 = 0;
 const int relay_gpio_2 = 2;
 // The GPIO pin that is connected to RELAY#3 on the board.
 const int relay_gpio_3 = 4;
-// The GPIO pin that is connected to RELAY#4 on the board.
-const int relay_gpio_4 = 5;
 
+//GPIO pin connected to leak/rain sensor
+#define RAIN_PIN 5
+#ifndef RAIN_PIN
+#error RAIN_PIN is not specified
+#endif
 
 // The GPIO pin that is connected to the header on the board(external switch).
 #define TOGGLE_PIN_1 12
@@ -55,9 +58,16 @@ const int relay_gpio_4 = 5;
 void lightbulb_on_1_callback(homekit_characteristic_t *_ch, homekit_value_t on, void *context);
 void lightbulb_on_2_callback(homekit_characteristic_t *_ch, homekit_value_t on, void *context);
 void lightbulb_on_3_callback(homekit_characteristic_t *_ch, homekit_value_t on, void *context);
-void lightbulb_on_4_callback(homekit_characteristic_t *_ch, homekit_value_t on, void *context);
 
 
+homekit_characteristic_t name = HOMEKIT_CHARACTERISTIC_(NAME, "LivRain");
+homekit_characteristic_t ota_trigger  = API_OTA_TRIGGER;
+homekit_characteristic_t manufacturer = HOMEKIT_CHARACTERISTIC_(MANUFACTURER,  "X");
+homekit_characteristic_t serial       = HOMEKIT_CHARACTERISTIC_(SERIAL_NUMBER, "1");
+homekit_characteristic_t model        = HOMEKIT_CHARACTERISTIC_(MODEL,         "Z");
+homekit_characteristic_t revision     = HOMEKIT_CHARACTERISTIC_(FIRMWARE_REVISION,  "0.0.0");
+homekit_characteristic_t rain_event = HOMEKIT_CHARACTERISTIC_(LEAK_DETECTED, 0);
+homekit_characteristic_t occupancy_detected = HOMEKIT_CHARACTERISTIC_(OCCUPANCY_DETECTED, 0);
 void relay_write_1(bool on) {
     gpio_write(relay_gpio_1, on ? 0 : 1);
 }
@@ -68,10 +78,6 @@ void relay_write_2(bool on) {
 
 void relay_write_3(bool on) {
     gpio_write(relay_gpio_3, on ? 0 : 1);
-}
-
-void relay_write_4(bool on) {
-    gpio_write(relay_gpio_4, on ? 0 : 1);
 }
 
 
@@ -96,22 +102,18 @@ void reset_configuration() {
 }
 
 homekit_characteristic_t lightbulb_on_1 = HOMEKIT_CHARACTERISTIC_(
-    ON, true, .callback=HOMEKIT_CHARACTERISTIC_CALLBACK(lightbulb_on_1_callback)
+    ON, false, .callback=HOMEKIT_CHARACTERISTIC_CALLBACK(lightbulb_on_1_callback)
 );
 
 homekit_characteristic_t lightbulb_on_2 = HOMEKIT_CHARACTERISTIC_(
-    ON, true, .callback=HOMEKIT_CHARACTERISTIC_CALLBACK(lightbulb_on_2_callback)
+    ON, false, .callback=HOMEKIT_CHARACTERISTIC_CALLBACK(lightbulb_on_2_callback)
 );
 
 homekit_characteristic_t lightbulb_on_3 = HOMEKIT_CHARACTERISTIC_(
-    ON, true, .callback=HOMEKIT_CHARACTERISTIC_CALLBACK(lightbulb_on_3_callback)
+    ON, false, .callback=HOMEKIT_CHARACTERISTIC_CALLBACK(lightbulb_on_3_callback)
 );
 
-homekit_characteristic_t lightbulb_on_4 = HOMEKIT_CHARACTERISTIC_(
-    ON, true, .callback=HOMEKIT_CHARACTERISTIC_CALLBACK(lightbulb_on_4_callback)
-);
 
-homekit_characteristic_t occupancy_detected = HOMEKIT_CHARACTERISTIC_(OCCUPANCY_DETECTED, 0);
 
 
 void gpio_init() {
@@ -124,12 +126,11 @@ void gpio_init() {
     gpio_enable(relay_gpio_3, GPIO_OUTPUT);
     relay_write_3(lightbulb_on_3.value.bool_value);
 
-    gpio_enable(relay_gpio_4, GPIO_OUTPUT);
-    relay_write_4(lightbulb_on_4.value.bool_value);
-
     gpio_enable(TOGGLE_PIN_1, GPIO_INPUT);
     gpio_enable(TOGGLE_PIN_2, GPIO_INPUT);
     gpio_enable(TOGGLE_PIN_3, GPIO_INPUT);
+    gpio_enable(SENSOR_PIN, GPIO_INPUT);
+    gpio_enable(RAIN_PIN, GPIO_INPUT);
 }
 
 void lightbulb_on_1_callback(homekit_characteristic_t *_ch, homekit_value_t on, void *context) {
@@ -142,10 +143,6 @@ void lightbulb_on_2_callback(homekit_characteristic_t *_ch, homekit_value_t on, 
 
 void lightbulb_on_3_callback(homekit_characteristic_t *_ch, homekit_value_t on, void *context) {
     relay_write_3(lightbulb_on_3.value.bool_value);
-}
-
-void lightbulb_on_4_callback(homekit_characteristic_t *_ch, homekit_value_t on, void *context) {
-    relay_write_4(lightbulb_on_4.value.bool_value);
 }
 
 
@@ -181,24 +178,26 @@ void occupancy_identify(homekit_value_t _value) {
     printf("Occupancy identify\n");
 }
 
+void skimmer_sensor_identify(homekit_value_t _value) {
+    printf("Skimmer Control identify\n");
+}
+
+
+//ContactSensor task
 void sensor_callback(bool high, void *context) {
     occupancy_detected.value = HOMEKIT_UINT8(high ? 1 : 0);
     homekit_characteristic_notify(&occupancy_detected, occupancy_detected.value);
 }
 
+//Rain sensor task
+void rain_callback(bool high, void *context) {
+    rain_event.value = HOMEKIT_UINT8(high ? 0 : 1);
+    homekit_characteristic_notify(&rain_event, rain_event.value);
+}
 
-homekit_characteristic_t name = HOMEKIT_CHARACTERISTIC_(NAME, "4relay");
-homekit_characteristic_t ota_trigger  = API_OTA_TRIGGER;
-homekit_characteristic_t manufacturer = HOMEKIT_CHARACTERISTIC_(MANUFACTURER,  "X");
-homekit_characteristic_t serial       = HOMEKIT_CHARACTERISTIC_(SERIAL_NUMBER, "1");
-homekit_characteristic_t model        = HOMEKIT_CHARACTERISTIC_(MODEL,         "Z");
-homekit_characteristic_t revision     = HOMEKIT_CHARACTERISTIC_(FIRMWARE_REVISION,  "0.0.0");
 
 homekit_accessory_t *accessories[] = {
-    HOMEKIT_ACCESSORY(
-          .id=1,
-          .category=homekit_accessory_category_switch,
-          .services=(homekit_service_t*[]){
+    HOMEKIT_ACCESSORY(.id=1, .category=homekit_accessory_category_switch, .services=(homekit_service_t*[]){
             HOMEKIT_SERVICE(ACCESSORY_INFORMATION, .characteristics=(homekit_characteristic_t*[]){
             HOMEKIT_CHARACTERISTIC(IDENTIFY, light_identify),
             &name,
@@ -218,10 +217,7 @@ homekit_accessory_t *accessories[] = {
         NULL,
       }),
 
-    HOMEKIT_ACCESSORY(
-          .id=2,
-          .category=homekit_accessory_category_switch,
-          .services=(homekit_service_t*[]){
+    HOMEKIT_ACCESSORY(.id=2, .category=homekit_accessory_category_switch, .services=(homekit_service_t*[]){
             HOMEKIT_SERVICE(ACCESSORY_INFORMATION, .characteristics=(homekit_characteristic_t*[]){
             HOMEKIT_CHARACTERISTIC(IDENTIFY, light_identify),
             HOMEKIT_CHARACTERISTIC(NAME, "Spots"),
@@ -240,10 +236,7 @@ homekit_accessory_t *accessories[] = {
         NULL,
       }),
 
-      HOMEKIT_ACCESSORY(
-            .id=3,
-            .category=homekit_accessory_category_switch,
-            .services=(homekit_service_t*[]){
+      HOMEKIT_ACCESSORY(.id=3, .category=homekit_accessory_category_switch, .services=(homekit_service_t*[]){
               HOMEKIT_SERVICE(ACCESSORY_INFORMATION, .characteristics=(homekit_characteristic_t*[]){
               HOMEKIT_CHARACTERISTIC(IDENTIFY, light_identify),
               HOMEKIT_CHARACTERISTIC(NAME, "Lâmpadas"),
@@ -261,27 +254,24 @@ homekit_accessory_t *accessories[] = {
         NULL,
       }),
 
-      HOMEKIT_ACCESSORY(
-            .id=4,
-            .category=homekit_accessory_category_switch,
-            .services=(homekit_service_t*[]){
+      HOMEKIT_ACCESSORY(.id=4, .category=homekit_accessory_category_sensor, .services=(homekit_service_t*[]){
               HOMEKIT_SERVICE(ACCESSORY_INFORMATION, .characteristics=(homekit_characteristic_t*[]){
               HOMEKIT_CHARACTERISTIC(IDENTIFY, light_identify),
-              HOMEKIT_CHARACTERISTIC(NAME, "Pendentes"),
+              HOMEKIT_CHARACTERISTIC(NAME, "Sensor de Chuva"),
               &manufacturer,
               &serial,
               &model,
               &revision,
               NULL
           }),
-
-        HOMEKIT_SERVICE(LIGHTBULB, .characteristics=(homekit_characteristic_t*[]){
-            HOMEKIT_CHARACTERISTIC(NAME, "Pendentes"),
-            &lightbulb_on_4,
+        HOMEKIT_SERVICE(LEAK_SENSOR, .characteristics=(homekit_characteristic_t*[]){
+            HOMEKIT_CHARACTERISTIC(NAME, "Sensor de Chuva"),
+            &rain_event,
             NULL
         }),
         NULL,
       }),
+
 
           HOMEKIT_ACCESSORY(.id=5, .category=homekit_accessory_category_sensor, .services=(homekit_service_t*[]) {
               HOMEKIT_SERVICE(ACCESSORY_INFORMATION, .characteristics=(homekit_characteristic_t*[]) {
@@ -350,6 +340,10 @@ void user_init(void) {
     }
 
     if (toggle_create(SENSOR_PIN, sensor_callback, NULL)) {
+        printf("Failed to initialize sensor\n");
+    }
+
+    if (toggle_create(RAIN_PIN, rain_callback, NULL)) {
         printf("Failed to initialize sensor\n");
     }
 

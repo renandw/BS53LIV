@@ -23,7 +23,7 @@ const int relay_gpio_1 = 0;
 // The GPIO pin that is connected to RELAY#2 on the board.
 const int relay_gpio_2 = 2;
 // The GPIO pin that is connected to RELAY#3 on the board.
-const int relay_gpio_3 = 4;
+const int relay_gpio_3 = 16;
 
 // The GPIO pin that is connected to the button1 on the Board.
 #define BUTTON_PIN 3
@@ -53,7 +53,7 @@ const int relay_gpio_3 = 4;
 #error TOGGLE_PIN_2 is not specified
 #endif
 
-#define TOGGLE_PIN_3 16
+#define TOGGLE_PIN_3 4
 #ifndef TOGGLE_PIN_3
 #error TOGGLE_PIN_3 is not specified
 #endif
@@ -192,7 +192,6 @@ void toggle_callback_3(bool high, void *context) {
         lightbulb_on_3.value.bool_value = !lightbulb_on_3.value.bool_value;
         relay_write_3(lightbulb_on_3.value.bool_value);
         homekit_characteristic_notify(&lightbulb_on_3, lightbulb_on_3.value);
-        reset_configuration();
 }
 
 
@@ -298,7 +297,7 @@ homekit_accessory_t *accessories[] = {
 
         HOMEKIT_ACCESSORY(.id=5, .category=homekit_accessory_category_sensor, .services=(homekit_service_t*[]) {
                 HOMEKIT_SERVICE(ACCESSORY_INFORMATION, .characteristics=(homekit_characteristic_t*[]) {
-                        HOMEKIT_CHARACTERISTIC(NAME, "Contact Sensor_2"),
+                        HOMEKIT_CHARACTERISTIC(NAME, "Contact Sensor 2"),
                         &manufacturer,
                         &serial,
                         &model,
@@ -307,13 +306,13 @@ homekit_accessory_t *accessories[] = {
                         NULL
                 }),
                 HOMEKIT_SERVICE(CONTACT_SENSOR, .characteristics=(homekit_characteristic_t*[]) {
-                        HOMEKIT_CHARACTERISTIC(NAME, "Contact Sensor_2"),
+                        HOMEKIT_CHARACTERISTIC(NAME, "Contact Sensor 2"),
                         &door_open_detected_2,
                         NULL
                 }),
                 NULL
         }),
-        HOMEKIT_ACCESSORY(.id=8, .category=homekit_accessory_category_programmable_switch, .services=(homekit_service_t*[]) {
+        HOMEKIT_ACCESSORY(.id=6, .category=homekit_accessory_category_programmable_switch, .services=(homekit_service_t*[]) {
                 HOMEKIT_SERVICE(ACCESSORY_INFORMATION, .characteristics=(homekit_characteristic_t*[]) {
                         HOMEKIT_CHARACTERISTIC(NAME, "Botão Inteligente"),
                         &manufacturer,
